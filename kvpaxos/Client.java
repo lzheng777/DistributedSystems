@@ -2,6 +2,7 @@ package kvpaxos;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.Random;
 
 
 public class Client {
@@ -9,12 +10,16 @@ public class Client {
     int[] ports;
 
     // Your data here
-
+    Random rand = new Random();
+    int clientId;
+    int clientReq;
 
     public Client(String[] servers, int[] ports){
         this.servers = servers;
         this.ports = ports;
         // Your initialization code here
+        clientId = rand.nextInt();
+        clientReq = 0;
     }
 
     /**
@@ -52,7 +57,7 @@ public class Client {
     public Integer Get(String key){
         // Your code here
         Response res = null;
-        Request req = new Request("Get", key, null); 
+        Request req = new Request("Get", key, null, clientId + "_" + clientReq); 
         int server = 0;
 
         // Sends request to different servers in case 1 fails/times out
@@ -61,12 +66,13 @@ public class Client {
             server = (server + 1) % ports.length;
         }
 
+        clientReq++;
         return res.op.value;
     }
 
     public boolean Put(String key, Integer value){
         // Your code here
-        Request req = new Request("Put", key, value);
+        Request req = new Request("Put", key, value, clientId + "_" + clientReq);
         Response res = null;
         int server = 0;
 
@@ -75,6 +81,7 @@ public class Client {
             server = (server + 1) % ports.length;
         }
 
+        clientReq++;
         return true;
     }
 

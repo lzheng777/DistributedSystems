@@ -9,9 +9,11 @@ import java.io.Serializable;
 public class Response implements Serializable {
     static final long serialVersionUID=22L;
     Op op;
+    String reqId;
 
     // Your constructor and methods here
-    public Response(Op operation){
+    public Response(Op operation, String r){
         op = operation;
+        reqId = r;
     }
 }

@@ -12,11 +12,13 @@ public class Request implements Serializable {
     String op;
     String key;
     Integer value;
+    String reqId;
 
     // Your constructor and methods here
-    public Request(String operation, String k, Integer v){
+    public Request(String operation, String k, Integer v, String r){
         op = operation;
         key = k;
         value = v;
+        reqId = r;
     }
 }

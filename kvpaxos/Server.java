@@ -6,6 +6,7 @@ import paxos.State;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server implements KVPaxosRMI {
@@ -21,6 +22,7 @@ public class Server implements KVPaxosRMI {
 
     // Your definitions here
     int nextSeq;
+    HashMap<String, Response> storedResponse;
 
     public Server(String[] servers, int[] ports, int me){
         this.me = me;
@@ -30,6 +32,7 @@ public class Server implements KVPaxosRMI {
         this.px = new Paxos(me, servers, ports);
         // Your initialization code here
         nextSeq = 0;
+        storedResponse = new HashMap<>();
 
         try{
             System.setProperty("java.rmi.server.hostname", this.servers[this.me]);
@@ -47,6 +50,13 @@ public class Server implements KVPaxosRMI {
         // Your code here
         // get Paxos instance max sequence number
         mutex.lock();
+        // check if kvpaxos already completed request before
+        Response doneRes = storedResponse.get(req.reqId);
+        if (doneRes != null){
+            mutex.unlock();
+            return doneRes;
+        }
+
         int seq = nextSeq < px.Max() ? px.Max() : nextSeq;
         seq++;
         nextSeq = seq;
@@ -58,12 +68,20 @@ public class Server implements KVPaxosRMI {
         Op res = wait(seq);
         px.Done(seq);
 
-        return new Response(res);
+        Response response = new Response(res, req.reqId);
+        storedResponse.put(req.reqId, response);
+        return response;
     }
 
     public Response Put(Request req){
         // Your code here
         mutex.lock();
+        Response doneRes = storedResponse.get(req.reqId);
+        if (doneRes != null){
+            mutex.unlock();
+            return doneRes;
+        }
+
         int seq = nextSeq < px.Max() ? px.Max() : nextSeq;
         seq++;
         nextSeq = seq;
@@ -72,8 +90,11 @@ public class Server implements KVPaxosRMI {
         Op op = new Op(req.op, seq, req.key, req.value);
         px.Start(seq, op);
         Op res = wait(seq);
+        px.Done(seq);
 
-        return new Response(res);
+        Response response = new Response(res, req.reqId);
+        storedResponse.put(req.reqId, response);
+        return response;
     }
 
     public Op wait(int seq){
