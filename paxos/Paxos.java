@@ -170,13 +170,14 @@ public class Paxos implements PaxosRMI, Runnable{
         int numberOfSystems = peers.length;
 
         while (myTask.state == State.Pending) {                         //while not decided, do:
+//            System.out.println("While loop "+this.me+" "+seq);
             int n = this.np + 1 + me;                                   //choose n, higher than any seen so far, and unique
             Response[] prepareResponses = new Response[numberOfSystems];
             int majorityCount = 0;
             for (int i=0; i<numberOfSystems; i++) {                     //send prepare(n) to all servers including self
                 String peer = peers[i];
                 int port = ports[i];
-                Response response = Call("Prepare", new Request(seq, val, n, this.me, this.done[this.me]), port);
+                Response response = Call("Prepare", new Request(seq, val, n, this.me, this.done[this.me]), i);
                 if (response == null)
                     continue;
                 prepareResponses[i] = response;
@@ -187,7 +188,7 @@ public class Paxos implements PaxosRMI, Runnable{
                 int naMax = prepareResponses[this.me].na;
                 Object vPrime = prepareResponses[this.me].va;
                 for (int i=0; i<numberOfSystems; i++){                  //v'=va with the highest na; choose own v otherwise
-                    if(prepareResponses[i].na > naMax)
+                    if(prepareResponses[i] != null && prepareResponses[i].na > naMax)
                         vPrime = prepareResponses[i].va;
                 }
                 Response[] acceptResponses = new Response[numberOfSystems];
@@ -195,16 +196,16 @@ public class Paxos implements PaxosRMI, Runnable{
                 for (int i=0; i<numberOfSystems; i++){                  //send accept(n,v') to all servers
                     String peer = peers[i];
                     int port = ports[i];
-                    Response response = Call("Accept", new Request(seq, vPrime, n, this.me, this.done[this.me]), port);
+                    Response response = Call("Accept", new Request(seq, vPrime, n, this.me, this.done[this.me]), i);
                     acceptResponses[i] = response;
-                    if(response.ok)
+                    if(response != null && response.ok)
                         majorityCount+=1;
                 }
                 if(majorityCount >= (numberOfSystems/2)){               //if accept_ok(n) from majority then
                     for (int i=0; i<numberOfSystems; i++){              //send decide(v') to all
                         String peer = peers[i];
                         int port = ports[i];
-                        Call("Decide", new Request(seq, vPrime, n, this.me, this.done[this.me]), port);
+                        Call("Decide", new Request(seq, vPrime, n, this.me, this.done[this.me]), i);
                     }
                     myTask.state = State.Decided;
                 }
@@ -229,6 +230,7 @@ public class Paxos implements PaxosRMI, Runnable{
     // RMI handler
     public Response Prepare(Request req){
         // your code here
+//        System.out.println("Received a prepare message");
         mutex.lock();
         try {
             taskHandler(req);
@@ -271,7 +273,7 @@ public class Paxos implements PaxosRMI, Runnable{
             Iterator<Task> iterator = tasks.iterator();
             while (iterator.hasNext()){
                 Task task = iterator.next();
-                if(task.seq <= minSeq){
+                if(task.seq < minSeq){
                     task.state = State.Forgotten;
                     iterator.remove();
                 }
@@ -348,7 +350,7 @@ public class Paxos implements PaxosRMI, Runnable{
             if(done[i] < min)
                 min = done[i];
         }
-        return min;
+        return min + 1;
     }
 
 
@@ -363,13 +365,16 @@ public class Paxos implements PaxosRMI, Runnable{
     public retStatus Status(int seq){
         // Your code here
         mutex.lock();
+        System.out.print("checking status of "+this.me);
         try{
             for (Task task :
                     this.tasks) {
                 if (task.seq == seq) {
+                    System.out.println("\t"+task.state);
                     return new retStatus(task.state, task.val);
                 }
             }
+            System.out.println("\t"+State.Forgotten);
             return new retStatus(State.Forgotten, null);
         }finally {
             mutex.unlock();
