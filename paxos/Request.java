@@ -13,10 +13,14 @@ public class Request implements Serializable {
     int seq;
     Object val;
     int n;
+    int sender;
+    int done;
     // Your constructor and methods here
-    public Request(int seq, Object val, int n){
+    public Request(int seq, Object val, int n, int sender, int done){
         this.seq = seq;
         this.val = val;
         this.n = n;
+        this.sender = sender;
+        this.done = done;
     }
 }

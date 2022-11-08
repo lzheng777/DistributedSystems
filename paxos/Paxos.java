@@ -2,6 +2,8 @@ package paxos;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
 import java.rmi.registry.Registry;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,7 +29,9 @@ public class Paxos implements PaxosRMI, Runnable{
     int np;
     int na;
     Object va;
-    List<Task> tasks = new LinkedList<>();
+    List<Task> tasks;
+    int maxSeq;
+    int[] done;
 
     protected class Task{
         int seq;
@@ -61,6 +65,10 @@ public class Paxos implements PaxosRMI, Runnable{
         this.np = 0;
         this.na = 0;
         this.va = 0;
+        this.tasks = new LinkedList<>();
+        this.maxSeq = -1;
+        this.done = new int[peers.length];
+        Arrays.fill(this.done, -1);
 
         // register peers, do not modify this part
         try{
@@ -162,13 +170,15 @@ public class Paxos implements PaxosRMI, Runnable{
         int numberOfSystems = peers.length;
 
         while (myTask.state == State.Pending) {                         //while not decided, do:
-            int n = Max() + 1 + me;                                     //choose n, higher than any seen so far, and unique
+            int n = this.np + 1 + me;                                   //choose n, higher than any seen so far, and unique
             Response[] prepareResponses = new Response[numberOfSystems];
             int majorityCount = 0;
             for (int i=0; i<numberOfSystems; i++) {                     //send prepare(n) to all servers including self
                 String peer = peers[i];
                 int port = ports[i];
-                Response response = Call("Prepare", new Request(seq, val, n), port);
+                Response response = Call("Prepare", new Request(seq, val, n, this.me, this.done[this.me]), port);
+                if (response == null)
+                    continue;
                 prepareResponses[i] = response;
                 if(response.ok)
                     majorityCount+=1;
@@ -185,7 +195,7 @@ public class Paxos implements PaxosRMI, Runnable{
                 for (int i=0; i<numberOfSystems; i++){                  //send accept(n,v') to all servers
                     String peer = peers[i];
                     int port = ports[i];
-                    Response response = Call("Accept", new Request(seq, vPrime, n), port);
+                    Response response = Call("Accept", new Request(seq, vPrime, n, this.me, this.done[this.me]), port);
                     acceptResponses[i] = response;
                     if(response.ok)
                         majorityCount+=1;
@@ -194,11 +204,25 @@ public class Paxos implements PaxosRMI, Runnable{
                     for (int i=0; i<numberOfSystems; i++){              //send decide(v') to all
                         String peer = peers[i];
                         int port = ports[i];
-                        Call("Decide", new Request(seq, vPrime, n), port);
+                        Call("Decide", new Request(seq, vPrime, n, this.me, this.done[this.me]), port);
                     }
                     myTask.state = State.Decided;
                 }
             }
+        }
+    }
+
+    private void taskHandler(Request req){
+        boolean found = false;
+        Iterator<Task> iterator = tasks.iterator();
+        while (iterator.hasNext() && !found) {
+            Task task = iterator.next();
+            if(task.seq == req.seq){
+                found = true;
+            }
+        }
+        if(!found){
+            tasks.add(new Task(req.seq, req.val, State.Pending, true));
         }
     }
 
@@ -207,6 +231,9 @@ public class Paxos implements PaxosRMI, Runnable{
         // your code here
         mutex.lock();
         try {
+            taskHandler(req);
+            if(req.seq > this.maxSeq)
+                this.maxSeq = req.seq;
             if (req.n > this.np) {                                            //if n > np
                 this.np = req.n;                                            //np = n
                 return new Response(this.np, this.na, this.va, true);   //reply prepare_ok(n,na,va)
@@ -221,6 +248,7 @@ public class Paxos implements PaxosRMI, Runnable{
         // your code here
         mutex.lock();
         try {
+            taskHandler(req);
             if (req.n >= this.np) {                                           //if n >= np
                 this.np = req.n;                                            //np = n
                 this.na = req.n;                                            //na = n
@@ -235,7 +263,27 @@ public class Paxos implements PaxosRMI, Runnable{
 
     public Response Decide(Request req){
         // your code here
-
+        mutex.lock();
+        try {
+            taskHandler(req);
+            done[req.sender] = req.done;
+            int minSeq = Min();
+            Iterator<Task> iterator = tasks.iterator();
+            while (iterator.hasNext()){
+                Task task = iterator.next();
+                if(task.seq <= minSeq){
+                    task.state = State.Forgotten;
+                    iterator.remove();
+                }
+                if(task.seq == req.seq){
+                    task.state = State.Decided;
+                    task.val = req.val;
+                }
+            }
+            return new Response(req.n, this.na, this.va, true);
+        }finally {
+            mutex.unlock();
+        }
     }
 
     /**
@@ -248,13 +296,7 @@ public class Paxos implements PaxosRMI, Runnable{
         // Your code here
         mutex.lock();
         try{
-            for (Task task :
-                    this.tasks) {
-                if(task.seq == seq){
-                    task.state = State.Forgotten;
-                    break;
-                }
-            }
+            this.done[this.me] = seq;
         }finally {
             mutex.unlock();
         }
@@ -268,7 +310,7 @@ public class Paxos implements PaxosRMI, Runnable{
      */
     public int Max(){
         // Your code here
-        return this.np;
+        return this.maxSeq;
     }
 
     /**
@@ -301,7 +343,12 @@ public class Paxos implements PaxosRMI, Runnable{
      */
     public int Min(){
         // Your code here
-
+        int min = done[0];
+        for (int i = 1; i < done.length; i++) {
+            if(done[i] < min)
+                min = done[i];
+        }
+        return min;
     }
 
 
@@ -323,7 +370,7 @@ public class Paxos implements PaxosRMI, Runnable{
                     return new retStatus(task.state, task.val);
                 }
             }
-            return null;
+            return new retStatus(State.Forgotten, null);
         }finally {
             mutex.unlock();
         }
