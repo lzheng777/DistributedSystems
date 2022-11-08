@@ -51,11 +51,31 @@ public class Client {
     // RMI handlers
     public Integer Get(String key){
         // Your code here
+        Response res = null;
+        Request req = new Request("Get", key, null); 
+        int server = 0;
 
+        // Sends request to different servers in case 1 fails/times out
+        while (res == null){
+            res = Call("Get", req, server);
+            server = (server + 1) % ports.length;
+        }
+
+        return res.op.value;
     }
 
     public boolean Put(String key, Integer value){
         // Your code here
+        Request req = new Request("Put", key, value);
+        Response res = null;
+        int server = 0;
+
+        while (res == null){
+            res = Call("Put", req, server);
+            server = (server + 1) % ports.length;
+        }
+
+        return true;
     }
 
 }
