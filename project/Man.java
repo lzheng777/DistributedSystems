@@ -1,71 +1,73 @@
 package project;
 
-import java.util.List;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.rmi.RemoteException;
+import java.util.*;
 
-public class Man implements Runnable{
-    List<Woman> mPref;
+public class Man extends Caller implements ManRMI, Runnable{
+    List<Integer> mPref;
     List<Integer> mRank;
     List<HashSet<Proposal>> prereq;
-    int id;
-    int proposal;
+    int proposal;   //Gi - proposal number by Pi
 
-    public Man(int id, ArrayList<Woman> mPref){
-        this.id = id;
+    public Man(int id, String[] peers, int[] ports, ArrayList<Integer> mPref){
+        super(id, peers, ports);
         this.mPref = mPref;
-        this.mRank = new ArrayList<>(mPref.size());
-
-        for (int i = 0; i < mPref.size(); i++){
-            mRank.set(mPref.get(i).getId(), i);
+        this.mRank = new ArrayList<>();
+        for (int i = 0; i < this.mPref.size(); i++) {
+            this.mRank.add(-1);
         }
 
-        proposal = 0;
-        prereq = new ArrayList<>();
+        for (int i = 0; i < this.mPref.size(); i++){
+            this.mRank.set(this.mPref.get(i), i);
+        }
 
-        HashSet<Proposal> set = new HashSet<>();
-        for (int i = 0; i < mPref.size(); i++){
-            prereq.add(new HashSet<>(set));
-            set.add(new Proposal(this, mPref.get(i)));
+        this.proposal = 0;
+        this.prereq = new ArrayList<>();
+
+        for (int i = 0; i < this.mPref.size(); i++){
+            this.prereq.add(new HashSet<>());
         }
     }
 
     public void run(){
         for (Proposal p : prereq.get(proposal)){
-            p.m.advance(p.w);
-            mPref.get(proposal).propose(this);
+            //todo: Call ("advance", w) on Man Pm
+            Response response = CallMan(Message.ADVANCE, new Request(p.woman, p.man), p.man);
         }
-    }
-
-    public boolean reject(Woman j){
-        if (mPref.get(proposal) == j){
-            if (proposal == mPref.size()){
-                return false;
-            }
-
-            proposal++;
-            for (Proposal p : prereq.get(proposal)){
-                p.m.advance(p.w);
-                if (mPref.get(proposal).propose(this)){
-                    break;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    public void advance(Woman q){
-        while (mRank.get(q.getId()) > proposal){
-            proposal++;
-            for (Proposal p : prereq.get(proposal)){
-                p.m.advance(p.w);
-            }
-        }
-        mPref.get(proposal).propose(this);
+        //todo: Call ("propose", i) to woman mpref[Gi]
+        Response response = CallWoman(Message.PROPOSE, new Request(getProposal(), getId()), getProposal());
     }
 
     public int getId(){
-        return id;
+        return this.me;
+    }
+
+    public int getProposal() {return this.mPref.get(this.proposal);}
+
+    @Override
+    public Response Advance(Request req) throws RemoteException {
+        while (mRank.get(req.woman) > proposal){
+            proposal++;
+            for (Proposal p : prereq.get(proposal)){
+                Response response = CallMan(Message.ADVANCE, new Request(p.woman, p.man), p.man);
+            }
+        }
+        Response response = CallWoman(Message.PROPOSE, new Request(getProposal(), getId()), getProposal());
+        return null;
+    }
+
+    @Override
+    public Response Reject(Request req) throws RemoteException {
+        if (getProposal() == req.woman){
+            proposal++;
+            if (proposal == mPref.size()){
+                return new Response(false);
+            }
+            for (Proposal p : prereq.get(proposal)){
+                Response response = CallMan(Message.ADVANCE, new Request(p.woman, p.man), p.man);
+            }
+            Response response = CallWoman(Message.PROPOSE, new Request(getProposal(), getId()), getProposal());
+        }
+        return new Response(true);
     }
 }

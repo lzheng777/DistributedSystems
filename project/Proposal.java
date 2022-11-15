@@ -1,11 +1,11 @@
 package project;
 
 public class Proposal {
-    public Man m;
-    public Woman w;
+    public int man;
+    public int woman;
 
-    public Proposal(Man mId, Woman wId){
-        m = mId;
-        w = wId;
+    public Proposal(int man, int woman){
+        this.man = man;
+        this.woman = woman;
     }
 }

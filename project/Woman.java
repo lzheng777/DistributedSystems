@@ -1,40 +1,45 @@
 package project;
 
-import java.util.List;
-import java.util.ArrayList;
+import java.rmi.RemoteException;
+import java.util.*;
 
-public class Woman implements Runnable{
+public class Woman extends Caller implements WomanRMI,Runnable{
+    List<Integer> wPref;
     List<Integer> wRank;
-    Man partner;
+    int partner;
 
-    int id;
-
-    public Woman(int id, ArrayList<Integer> wRank){
-        this.id = id;
-        this.wRank = wRank;
-        partner = null;
+    public Woman(int id, String[] peers, int[] ports, ArrayList<Integer> wpref){
+        super(id, peers, ports);
+        this.wPref = wpref;
+        this.wRank = new ArrayList<>(this.wPref.size());
+        for (int i = 0; i < wPref.size(); i++) {
+            wRank.add(-1);
+        }
+        for (int i = 0; i < wpref.size(); i++){
+            this.wRank.set(wpref.get(i), i);
+        }
+        partner = -1;
     }
 
     public void run(){
         // wait for proposals to come in
     }
 
-    public boolean propose(Man j){
-        if (partner == null){
-            partner = j;
-            return true;
-        }
-        // woman likes man j more than current partner
-        else if (wRank.get(j.getId()) < wRank.get(partner.getId())){
-            partner.reject(this);
-            partner = j;
-            return true;
-        }
-
-        return false;
+    public int getId(){
+        return this.me;
     }
 
-    public int getId(){
-        return id;
+    @Override
+    public Response Proposal(Request req) throws RemoteException {
+        if (partner == -1){
+            partner = req.man;
+            return new Response(true);
+        }
+        else if (wRank.get(req.man) < wRank.get(partner)){
+            CallMan(Message.REJECT, new Request(getId(),partner), partner);
+            partner = req.man;
+            return new Response(true);
+        }
+        return new Response(false);
     }
 }
