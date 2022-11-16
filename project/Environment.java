@@ -72,9 +72,7 @@ public class Environment {
         return preferenceLists;
     }
 
-    public Set<Proposal> runStableMarriage(String inputfile){
-        init(inputfile);
-
+    public Set<Proposal> runStableMarriage(){
         for (Woman woman : women) {
             new Thread(woman).start();
         }
@@ -99,8 +97,9 @@ public class Environment {
     }
 
     public static void main(String[] args) {
-        System.out.println("Hello World.");
+//        System.out.println("Hello World.");
         Environment env = new Environment();
-        env.runStableMarriage(args[1]);
+        env.init(args[1]);
+        env.runStableMarriage();
     }
 }
