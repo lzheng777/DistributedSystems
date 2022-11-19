@@ -87,18 +87,6 @@ public class testStableMarriage {
             int pref=0;
             do {
                 int loc=marriage.getEmployeePreference().get(emp).get(pref);
-//                if(locationMatching.get(loc).size()<marriage.getLocationSlots().get(loc)){
-//                    //accept
-//                    employeeMatching.set(emp,loc);
-//                    locationMatching.get(loc).add(emp);
-//                    break;
-//                }
-//                int lowestPref=-1;
-//                for(int j=0;j<locationMatching.get(loc).size();j++){
-//                    int p=locXemp[loc][locationMatching.get(loc).get(j)];
-//                    if(p>lowestPref)
-//                        lowestPref=p;
-//                }
                 int emp2=locationMatching.get(loc);
                 if(emp2 == -1){
                     //accept
@@ -108,13 +96,10 @@ public class testStableMarriage {
                 }
                 if(locXemp[loc][emp]<locXemp[loc][emp2]){
                     //accept and reject
-//                    int rejectEmp=marriage.getLocationPreference().get(loc).get(lowestPref);
                     int rejectEmp = emp2;
                     employeeMatching.set(rejectEmp,-1);
-//                    locationMatching.get(loc).remove((Integer)rejectEmp);
                     queue.add(rejectEmp);
                     employeeMatching.set(emp,loc);
-//                    locationMatching.get(loc).add(emp);
                     locationMatching.set(loc,emp);
                     break;
                 }
@@ -134,25 +119,24 @@ public class testStableMarriage {
         env.init(filepath);
 
         Matching sequential = new Matching(env.m, env.n, env.wprefs, env.mprefs);
-        long startTime = System.currentTimeMillis();
+        final long startTime = System.currentTimeMillis();
         stableMarriageGaleShapley_sequential(sequential);
-        long endTime = System.currentTimeMillis();
+        final long endTime = System.currentTimeMillis();
         final long sequentialTime = (endTime - startTime);
 
-        startTime = System.currentTimeMillis();
-        env.runStableMarriage();
-        endTime = System.currentTimeMillis();
-        final long distributedTime = (endTime - startTime);
+        final long distributedTime = env.runStableMatching();
         ArrayList<Integer> finalMatching = new ArrayList<>();
         for (Man man : env.men) {
             finalMatching.add(man.getProposal());
         }
         Matching distributed = new Matching(env.m, env.n, env.wprefs, env.mprefs, finalMatching);
 
-        assertTrue(isStableMatching(distributed));
         assertTrue(isStableMatching(sequential));
+        assertTrue(isStableMatching(distributed));
+        assertTrue(sequential.equals(distributed));
 //        assertTrue("Distributed Time: "+distributedTime+"\t Sequential Time: "+sequentialTime, distributedTime<sequentialTime);
         System.out.println("Distributed Time: "+distributedTime+"\t Sequential Time: "+sequentialTime);
+        System.out.println(finalMatching);
     }
 
     @Test
@@ -194,13 +178,18 @@ public class testStableMarriage {
     public void Test8(){
         TestBasic("src/data/large_inputs/320.in");
     }
+
+    @Test
+    public void ClassDemo(){
+        TestBasic("src/data/ClassDemo.in");
+    }
 }
 
 class Matching{
-    private Integer m;
-    private Integer n;
-    private ArrayList<ArrayList<Integer>> woman_preference;
-    private ArrayList<ArrayList<Integer>> man_preference;
+    private final Integer m;
+    private final Integer n;
+    private final ArrayList<ArrayList<Integer>> woman_preference;
+    private final ArrayList<ArrayList<Integer>> man_preference;
     private ArrayList<Integer> matching;
     public Matching(
             Integer m,
@@ -240,4 +229,16 @@ class Matching{
         return matching;
     }
     public void setMatching(ArrayList<Integer> matching){ this.matching = matching; }
+    public boolean equals(Matching input) {
+        if(this.matching.size() != input.matching.size())
+            return false;
+        for (int i = 0; i < this.matching.size(); i++) {
+            int j = this.matching.get(i);
+            int k = input.matching.get(i);
+            if (j!=k) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

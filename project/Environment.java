@@ -32,10 +32,10 @@ public class Environment {
             wports[i] = 1100+i+n;
         }
         for(int i = 0; i < n; i++){
-            men[i] = new Man(i, wpeers, wports, mprefs.get(i));
+            men[i] = new Man(i, mpeers, mports, wpeers, wports, mprefs.get(i));
         }
         for (int i = 0; i < m; i++) {
-            women[i] = new Woman(i, mpeers, mports, wprefs.get(i));
+            women[i] = new Woman(i, mpeers, mports, wpeers, wports, wprefs.get(i));
         }
     }
 
@@ -72,34 +72,54 @@ public class Environment {
         return preferenceLists;
     }
 
-    public Set<Proposal> runStableMarriage(){
-        for (Woman woman : women) {
-            new Thread(woman).start();
-        }
-        Thread[] threads = new Thread[n];
-        for (int i = 0; i < n; i++) {
-            threads[i] = new Thread(men[i]);
-            threads[i].start();     //send "initiate" to all men
-        }
+    public long runStableMatching(){
+        long startTime = 0, endTime = 0, distributedTime = 0;
         try {
+            Thread[] womanThreads = new Thread[m];
+            for (int i = 0; i < m; i++) {
+                womanThreads[i] = new Thread(women[i]);
+                womanThreads[i].start();     //send "initiate" to all women
+            }
+            Thread[] manThreads = new Thread[n];
             for (int i = 0; i < n; i++) {
-                threads[i].join();
+                manThreads[i] = new Thread(men[i]);
+            }
+            startTime = System.currentTimeMillis();
+            for (int i = 0; i < n; i++) {
+                manThreads[i].start();     //send "initiate" to all men
+            }
+            for (int i = 0; i < n; i++) {
+                manThreads[i].join();
+            }
+            for (int i = 0; i < n; i++) {
+                manThreads[i].join();
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }finally {
+            endTime = System.currentTimeMillis();
+            distributedTime = (endTime - startTime);
+
+            for(int i = 0; i < n; i++){
+                men[i].Kill();
+            }
+            for(int i = 0; i < m; i++){
+                women[i].Kill();
+            }
         }
 
-        Set<Proposal> proposals = new HashSet<>();
-        for (Man man : men) {
-            proposals.add(new Proposal(man.getId(), man.getProposal()));
-        }
-        return proposals;
+//        ArrayList<Integer> finalMatching = new ArrayList<>();
+//        for (Man man : men) {
+//            finalMatching.add(man.getProposal());
+//        }
+//        System.out.println(finalMatching);
+
+        return distributedTime;
     }
 
     public static void main(String[] args) {
-//        System.out.println("Hello World.");
         Environment env = new Environment();
         env.init(args[1]);
-        env.runStableMarriage();
+        env.runStableMatching();
     }
 }
